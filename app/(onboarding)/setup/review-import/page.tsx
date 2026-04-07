@@ -1,6 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";import { useRouter, useSearchParams } from "next/navigation";
 import { Stepper } from "@/components/onboarding/Stepper";
 
 interface Summary {
@@ -22,8 +21,7 @@ interface Summary {
   }>;
 }
 
-export default function ReviewImport() {
-  const router = useRouter();
+function ReviewImportInner() {  const router = useRouter();
   const params = useSearchParams();
   const stagingId = params.get("staging");
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -161,5 +159,13 @@ export default function ReviewImport() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function ReviewImport() {
+  return (
+    <Suspense>
+      <ReviewImportInner />
+    </Suspense>
   );
 }
