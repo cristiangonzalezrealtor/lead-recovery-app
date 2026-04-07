@@ -1,0 +1,413 @@
+// LeadRevive AI — Prisma schema (Phase 1)
+// Source of truth for all tables and enums.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ──────────────────────────────────────────────────────────
+
+enum LeadType {
+  seller
+  buyer
+  investor
+  rental
+  valuation
+  dormant
+}
+
+enum LeadStatus {
+  new
+  classified
+  scored
+  nurturing
+  engaged
+  replied
+  appointment_set
+  active_client
+  unsubscribed
+  bounced
+  archived
+}
+
+enum ScoreBand {
+  hot
+  warm
+  nurture
+  low
+}
+
+enum RevivalProb {
+  high
+  medium
+  low
+  none
+}
+
+enum ActivityType {
+  import
+  email_sent
+  email_open
+  email_click
+  email_reply
+  email_bounce
+  manual_note
+  status_change
+  score_change
+  enrollment_started
+  enrollment_paused
+  enrollment_stopped
+}
+
+enum SequenceStatus {
+  active
+  paused
+  completed
+  stopped
+}
+
+enum SendStatus {
+  scheduled
+  sent
+  failed
+  skipped
+}
+
+enum ImportStatus {
+  pending
+  previewing
+  committed
+  failed
+}
+
+enum Channel {
+  email
+}
+
+enum IntegrationType {
+  zapier
+  resend
+}
+
+enum NextActionPriority {
+  high
+  medium
+  low
+}
+
+enum EmailStatus {
+  valid
+  invalid
+  bounced
+}
+
+enum PhoneStatus {
+  valid
+  invalid
+  unknown
+}
+
+enum Confidence {
+  high
+  medium
+  low
+}
+
+enum MissedOpportunitySeverity {
+  critical
+  high
+  medium
+}
+
+enum MissedOpportunityKind {
+  hot_no_contact
+  hot_stale
+  click_no_followup
+  warm_repeated_opens
+  sequence_stalled
+}
+
+// ─── MODELS ─────────────────────────────────────────────────────────
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  passwordHash  String
+  role          String         @default("owner")
+  createdAt     DateTime       @default(now())
+  lastLoginAt   DateTime?
+  brandProfile  BrandProfile?
+  leads         Lead[]
+  imports       Import[]
+  sequences     Sequence[]
+  webhooks      Webhook[]
+  integrations  Integration[]
+  auditLogs     AuditLog[]
+  onboarding    UserOnboarding?
+}
+
+model UserOnboarding {
+  userId                  String    @id
+  leadsImported           Boolean   @default(false)
+  topLeadsReviewed        Boolean   @default(false)
+  revivalCampaignStarted  Boolean   @default(false)
+  sequenceEnrolled        Boolean   @default(false)
+  dismissedAt             DateTime?
+  completedAt             DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model BrandProfile {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  agentName            String
+  brokerage            String?
+  marketCity           String?
+  marketState          String?
+  tone                 String   @default("professional")
+  signatureHtml        String?
+
+  // Send-window enforcement (Phase 2.5)
+  sendWindowStartHour  Int      @default(9)
+  sendWindowEndHour    Int      @default(17)
+  timezone             String   @default("America/Los_Angeles")
+
+  createdAt            DateTime @default(now())
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Lead {
+  id                     String              @id @default(cuid())
+  userId                 String
+  firstName              String?
+  lastName               String?
+  email                  String?
+  phone                  String?
+  leadType               LeadType            @default(buyer)
+  tags                   String[]            @default([])
+  source                 String?
+  sourceQuality          Int                 @default(0)
+  intentSignal           String?
+  timeframeDays          Int?
+  status                 LeadStatus          @default(new)
+
+  // Scoring
+  score                  Int                 @default(0)
+  scoreBand              ScoreBand           @default(low)
+
+  // Revival
+  isDormant              Boolean             @default(false)
+  revivalProbability     RevivalProb         @default(none)
+
+  // AI + next action (adjustments #2, Phase 1.6)
+  aiSummary              String?
+  nextAction             String?
+  nextActionReason       String?
+  nextActionPriority     NextActionPriority?
+  nextActionGeneratedAt  DateTime?
+  revivalReasons         String[]            @default([])
+
+  // Contactability (adjustments #2)
+  emailStatus            EmailStatus?
+  phoneStatus            PhoneStatus?
+
+  lastEngagedAt          DateTime?
+  lastContactedAt        DateTime?
+  // Phase 3 — revival tracking
+  revivedAt              DateTime?
+
+  // Phase 4 — trust + missed opportunity surfacing
+  confidence             Confidence?
+  confidenceReason       String?
+  missedOpportunity         Boolean                    @default(false)
+  missedOpportunityReason   String?
+  missedOpportunitySince    DateTime?
+  missedOpportunitySeverity MissedOpportunitySeverity?
+  missedOpportunityKind     MissedOpportunityKind?
+  missedOpportunityHandledAt DateTime?
+
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  importedFromId         String?
+  externalId             String?
+
+  user                   User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  importedFrom           Import?             @relation(fields: [importedFromId], references: [id])
+  scoreFactors           LeadScoreFactor[]
+  activities             LeadActivity[]
+  enrollments            SequenceEnrollment[]
+
+  @@index([userId, score])
+  @@index([userId, status])
+  @@index([userId, isDormant])
+  @@unique([userId, email])
+}
+
+model LeadScoreFactor {
+  id          String   @id @default(cuid())
+  leadId      String
+  factorKey   String
+  factorLabel String
+  points      Int
+  createdAt   DateTime @default(now())
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+}
+
+model LeadActivity {
+  id         String       @id @default(cuid())
+  leadId     String
+  type       ActivityType
+  payload    Json?
+  occurredAt DateTime     @default(now())
+  lead       Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, occurredAt])
+}
+
+model Import {
+  id              String       @id @default(cuid())
+  userId          String
+  filename        String
+  rowCount        Int          @default(0)
+  acceptedCount   Int          @default(0)
+  rejectedCount   Int          @default(0)
+  duplicateCount  Int          @default(0)
+  status          ImportStatus @default(pending)
+  markAsDormant   Boolean      @default(false) // adjustment #5
+  digest          Json?        // Phase 4 — cached post-import results snapshot
+  digestReadyAt   DateTime?
+  committedAt     DateTime?
+  createdAt       DateTime     @default(now())
+
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rows            ImportRow[]
+  leads           Lead[]
+}
+
+model ImportRow {
+  id        String  @id @default(cuid())
+  importId  String
+  raw       Json
+  errorText String?
+  leadId    String?
+  import    Import  @relation(fields: [importId], references: [id], onDelete: Cascade)
+}
+
+model Sequence {
+  id          String               @id @default(cuid())
+  userId      String?
+  name        String
+  leadType    LeadType
+  tone        String               @default("professional")
+  ctaGoal     String?
+  isTemplate  Boolean              @default(false)
+  isActive    Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  user        User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  steps       SequenceStep[]
+  enrollments SequenceEnrollment[]
+}
+
+model SequenceStep {
+  id              String               @id @default(cuid())
+  sequenceId      String
+  stepIndex       Int
+  dayOffset       Int
+  channel         Channel              @default(email)
+  subjectTemplate String
+  bodyTemplate    String
+  aiInstructions  String?
+  stopRules       Json?
+  sequence        Sequence             @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  sends           SequenceSend[]
+}
+
+model SequenceEnrollment {
+  id           String         @id @default(cuid())
+  leadId       String
+  sequenceId   String
+  status       SequenceStatus @default(active)
+  currentStep  Int            @default(0)
+  nextSendAt   DateTime?
+  pausedReason String?
+  startedAt    DateTime       @default(now())
+  completedAt  DateTime?
+  lead         Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  sequence     Sequence       @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  sends        SequenceSend[]
+
+  // Adjustment #3 — only one active sequence per lead
+  @@unique([leadId, status], name: "one_active_per_lead")
+  @@index([nextSendAt])
+}
+
+model SequenceSend {
+  id              String       @id @default(cuid())
+  enrollmentId    String
+  stepId          String
+  scheduledAt     DateTime
+  sentAt          DateTime?
+  status          SendStatus   @default(scheduled)
+  renderedSubject String?
+  renderedBody    String?
+  messageId       String?
+  enrollment      SequenceEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  step            SequenceStep       @relation(fields: [stepId], references: [id], onDelete: Cascade)
+
+  // Phase 2.5 — duplicate send protection
+  @@unique([enrollmentId, stepId])
+}
+
+model Webhook {
+  id          String               @id @default(cuid())
+  userId      String
+  secret      String               @unique
+  endpointUrl String?
+  isActive    Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries  WebhookDelivery[]
+}
+
+model WebhookDelivery {
+  id          String   @id @default(cuid())
+  webhookId   String
+  payload     Json
+  source      String?
+  processedAt DateTime @default(now())
+  leadId      String?
+  webhook     Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+}
+
+model Integration {
+  id                 String          @id @default(cuid())
+  userId             String
+  type               IntegrationType
+  config             Json
+  isActive           Boolean         @default(true)
+  lastHealthCheckAt  DateTime?
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  actor      String
+  action     String
+  entityType String
+  entityId   String
+  before     Json?
+  after      Json?
+  occurredAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
