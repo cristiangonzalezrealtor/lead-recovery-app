@@ -26,8 +26,7 @@ export interface HeatingUpLead {
   signalAt: Date;
 }
 
-const ENGAGEMENT_TYPES = ["email_open", "email_click", "email_reply"] as const;
-
+const ENGAGEMENT_TYPES: ("email_open" | "email_click" | "email_reply")[] = ["email_open", "email_click", "email_reply"];
 function describeActivity(a: Pick<LeadActivity, "type">): string {
   switch (a.type) {
     case "email_reply":
