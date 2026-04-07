@@ -1,10 +1,13 @@
 import { requireUser } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { getOnboardingState } from "@/lib/core/onboarding/state";
 import { ChecklistReopenLink } from "@/components/onboarding/ChecklistReopenLink";
+import { ClearLeadsButton } from "@/components/ui/ClearLeadsButton";
 
 export default async function SettingsPage() {
   const user = await requireUser();
   const onboarding = await getOnboardingState(user.id);
+  const leadCount = await prisma.lead.count({ where: { userId: user.id } });
 
   const showReopen = onboarding.completedAt === null;
 
@@ -17,9 +20,37 @@ export default async function SettingsPage() {
 
       <div className="card">
         <h2>Brand profile</h2>
-        <div className="subtitle">Agent: {user.brandProfile?.agentName ?? "—"}</div>
-        <p style={{ margin: 0, color: "var(--ink-soft)" }}>
-          Full settings UI ships in Phase 5.
+        <div className="subtitle">Used to personalize every sequence step.</div>
+        <dl
+          style={{
+            display: "grid",
+            gridTemplateColumns: "160px 1fr",
+            gap: "8px 16px",
+            margin: "12px 0 0",
+          }}
+        >
+          <dt style={{ color: "var(--ink-soft)" }}>Agent name</dt>
+          <dd style={{ margin: 0 }}>
+            {user.brandProfile?.agentName ?? "—"}
+          </dd>
+          <dt style={{ color: "var(--ink-soft)" }}>Market</dt>
+          <dd style={{ margin: 0 }}>
+            {user.brandProfile?.market ?? "—"}
+          </dd>
+          <dt style={{ color: "var(--ink-soft)" }}>Tone</dt>
+          <dd style={{ margin: 0 }}>
+            {user.brandProfile?.tone ?? "—"}
+          </dd>
+        </dl>
+        <p
+          style={{
+            margin: "12px 0 0",
+            color: "var(--ink-mute)",
+            fontSize: 12,
+          }}
+        >
+          Profile editing lives in the onboarding flow today. Reach out if you
+          need to change anything above.
         </p>
       </div>
 
@@ -43,6 +74,19 @@ export default async function SettingsPage() {
         <form action="/api/auth/logout" method="post">
           <button className="btn" type="submit">Sign out</button>
         </form>
+      </div>
+
+      <div className="card" style={{ borderColor: "#b33" }}>
+        <h2 style={{ color: "#b33" }}>Danger zone</h2>
+        <div className="subtitle">
+          Clear everything and start over with a fresh import.
+        </div>
+        <p style={{ margin: "8px 0 12px", color: "var(--ink-soft)" }}>
+          Deletes every lead, every activity, every sequence enrollment, and
+          your import history. Your account, brand profile, and the built-in
+          sequence templates stay put.
+        </p>
+        <ClearLeadsButton leadCount={leadCount} />
       </div>
     </>
   );

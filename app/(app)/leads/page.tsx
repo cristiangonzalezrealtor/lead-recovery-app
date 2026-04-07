@@ -5,10 +5,18 @@ import { ScoreBadge } from "@/components/ui/Badge";
 import { ConfidenceBadge } from "@/components/leads/ConfidenceBadge";
 import type { Prisma } from "@prisma/client";
 
+const PAGE_SIZE = 100;
+
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: { filter?: string; type?: string; band?: string; show?: string };
+  searchParams: {
+    filter?: string;
+    type?: string;
+    band?: string;
+    show?: string;
+    page?: string;
+  };
 }) {
   const user = await requireUser();
 
@@ -29,6 +37,9 @@ export default async function LeadsPage({
   const topFive = searchParams.filter === "top-5";
   const showConfidence = searchParams.show === "confidence";
 
+  const pageNum = Math.max(1, Number(searchParams.page ?? "1") || 1);
+  const skip = topFive ? 0 : (pageNum - 1) * PAGE_SIZE;
+
   // Build the toggle URL by preserving existing params and flipping `show`.
   const toggleParams = new URLSearchParams();
   if (searchParams.filter) toggleParams.set("filter", searchParams.filter);
@@ -37,23 +48,51 @@ export default async function LeadsPage({
   if (!showConfidence) toggleParams.set("show", "confidence");
   const toggleHref = `/leads${toggleParams.toString() ? `?${toggleParams.toString()}` : ""}`;
 
-  const leads = await prisma.lead.findMany({
-    where: topFive ? { userId: user.id } : where,
-    orderBy: topFive
-      ? [{ nextActionPriority: "asc" }, { score: "desc" }]
-      : [{ score: "desc" }, { updatedAt: "desc" }],
-    take: topFive ? 5 : 200,
-  });
+  const effectiveWhere = topFive ? { userId: user.id } : where;
 
-  // Mark checklist item "Review top 5 leads" only after an action is
-  // taken. Visiting alone is no longer sufficient — refinement #3.
-  // (Tracking handled elsewhere: enroll / open / call from lead detail.)
+  const [leads, totalCount] = await Promise.all([
+    prisma.lead.findMany({
+      where: effectiveWhere,
+      orderBy: topFive
+        ? [{ nextActionPriority: "asc" }, { score: "desc" }]
+        : [{ score: "desc" }, { updatedAt: "desc" }],
+      take: topFive ? 5 : PAGE_SIZE,
+      skip,
+    }),
+    topFive
+      ? Promise.resolve(5)
+      : prisma.lead.count({ where: effectiveWhere }),
+  ]);
+
+  const totalPages = topFive ? 1 : Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const hasPrev = !topFive && pageNum > 1;
+  const hasNext = !topFive && pageNum < totalPages;
+
+  // Preserve filters when building page links.
+  function pageHref(p: number) {
+    const params = new URLSearchParams();
+    if (searchParams.filter) params.set("filter", searchParams.filter);
+    if (searchParams.type) params.set("type", searchParams.type);
+    if (searchParams.band) params.set("band", searchParams.band);
+    if (searchParams.show) params.set("show", searchParams.show);
+    if (p > 1) params.set("page", String(p));
+    return `/leads${params.toString() ? `?${params.toString()}` : ""}`;
+  }
+
+  const rangeStart = totalCount === 0 ? 0 : skip + 1;
+  const rangeEnd = skip + leads.length;
 
   return (
     <>
       <div className="page-header">
         <h1>Leads</h1>
-        <p>{leads.length} leads · sorted by score</p>
+        <p>
+          {topFive
+            ? `Top ${leads.length} — sorted by priority`
+            : totalCount === 0
+            ? "No leads yet"
+            : `${totalCount.toLocaleString()} leads · showing ${rangeStart}–${rangeEnd} · sorted by score`}
+        </p>
       </div>
 
       <div
@@ -89,6 +128,7 @@ export default async function LeadsPage({
               <tr>
                 <th style={{ paddingLeft: 22 }}>Name</th>
                 <th>Email</th>
+                <th>Phone</th>
                 <th>Type</th>
                 <th>Source</th>
                 <th>Score</th>
@@ -106,6 +146,7 @@ export default async function LeadsPage({
                     </Link>
                   </td>
                   <td>{l.email ?? "—"}</td>
+                  <td>{l.phone ?? "—"}</td>
                   <td>{l.leadType}</td>
                   <td>{l.source ?? "—"}</td>
                   <td className="score-cell">{l.score}</td>
@@ -130,6 +171,41 @@ export default async function LeadsPage({
           </table>
         )}
       </div>
+
+      {!topFive && totalCount > PAGE_SIZE && (
+        <div
+          className="card"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <div style={{ color: "var(--ink-soft)", fontSize: 13 }}>
+            Page {pageNum} of {totalPages}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {hasPrev ? (
+              <Link className="btn" href={pageHref(pageNum - 1)}>
+                ← Previous
+              </Link>
+            ) : (
+              <span className="btn" style={{ opacity: 0.4, pointerEvents: "none" }}>
+                ← Previous
+              </span>
+            )}
+            {hasNext ? (
+              <Link className="btn" href={pageHref(pageNum + 1)}>
+                Next →
+              </Link>
+            ) : (
+              <span className="btn" style={{ opacity: 0.4, pointerEvents: "none" }}>
+                Next →
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }

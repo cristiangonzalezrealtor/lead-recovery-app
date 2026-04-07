@@ -9,11 +9,20 @@ export default async function NurtureDefaults() {
       <Stepper current="nurture-defaults" />
       <h1>Nurture defaults</h1>
       <p className="lede">
-        Pick the default nurture style for each lead type. You can change this
-        per lead later. (Full sequence library ships in Phase 2.)
+        LeadRevive ships with 18 built-in sequences — 3 variants for each of the
+        6 lead types. You can pick a different one per lead any time.
       </p>
       <div className="card">
-        <div className="empty">Sequence selection will live here once the library ships.</div>
+        <h2>What&rsquo;s included</h2>
+        <div className="subtitle">Written to convert. No templating required.</div>
+        <ul style={{ margin: "8px 0 0", paddingLeft: 18, color: "var(--ink-soft)" }}>
+          <li>Seller, buyer, investor, rental, valuation, and dormant tracks</li>
+          <li>3 tone variants per track (direct, warm, and consultative)</li>
+          <li>Personalized at render time using what we know about each lead</li>
+        </ul>
+        <p style={{ margin: "12px 0 0", color: "var(--ink-soft)" }}>
+          Browse them any time at <Link href="/sequences">Sequence library</Link>.
+        </p>
       </div>
       <div className="actions">
         <Link className="btn ghost" href="/setup/review-import">Back</Link>

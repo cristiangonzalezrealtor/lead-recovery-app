@@ -19,6 +19,26 @@ interface CommitOptions {
   markAsDormant: boolean; // adjustment #5
 }
 
+/**
+ * Derive a sensible source name from the filename when the CSV has no
+ * source column. "vortex (2).csv" → "Vortex", "followup_boss_export.csv" →
+ * "Followup Boss", etc. Makes imported leads feel like they have real
+ * provenance instead of a blank "—" column.
+ */
+function deriveSourceFromFilename(filename: string): string {
+  const base = filename
+    .replace(/\.[^.]+$/, "") // strip extension
+    .replace(/[\s_\-]*\(\d+\)\s*$/, "") // strip " (1)", "_(2)", etc.
+    .replace(/[_\-]+/g, " ") // underscores → spaces
+    .trim();
+  if (!base) return "CSV import";
+  // Title-case each word
+  return base
+    .split(/\s+/)
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w))
+    .join(" ");
+}
+
 function coerceEmailStatus(email?: string | null): EmailStatus | null {
   if (!email) return null;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? "valid" : "invalid";
@@ -38,6 +58,8 @@ export async function commitImport(
 ) {
   const acceptedRows = preview.allRows.filter((r) => r.errors.length === 0);
   const rejectedRows = preview.allRows.filter((r) => r.errors.length > 0);
+
+  const fallbackSource = deriveSourceFromFilename(opts.filename);
 
   const importRecord = await prisma.import.create({
     data: {
@@ -83,7 +105,7 @@ export async function commitImport(
         email: row.email || null,
         phone: row.phone || null,
         leadType: (row.leadType as LeadType) ?? "buyer",
-        source: row.source || null,
+        source: row.source || fallbackSource,
         intentSignal: row.intentSignal || null,
         timeframeDays: row.timeframeDays ?? null,
         tags: row.tags

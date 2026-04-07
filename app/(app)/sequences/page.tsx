@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { LoadTemplatesButton } from "@/components/ui/LoadTemplatesButton";
 
 export default async function SequencesLibrary() {
   const user = await requireUser();
@@ -26,10 +27,35 @@ export default async function SequencesLibrary() {
       <div className="page-header">
         <h1>Sequence library</h1>
         <p>
-          {sequences.length} sequences · 3 variants per lead type · each step
-          personalized at render time.
+          {sequences.length === 0
+            ? "No sequences yet. Load the built-in templates to get started."
+            : `${sequences.length} sequences · 3 variants per lead type · each step personalized at render time.`}
         </p>
       </div>
+
+      {sequences.length === 0 && (
+        <div className="card">
+          <h2>Get the built-in templates</h2>
+          <div className="subtitle">
+            18 sequences — 3 variants for each of the 6 lead types (seller,
+            buyer, investor, rental, valuation, dormant). Each sequence has 7
+            steps with subject, body, and AI personalization instructions.
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <LoadTemplatesButton />
+          </div>
+          <p
+            style={{
+              margin: "12px 0 0",
+              color: "var(--ink-mute)",
+              fontSize: 12,
+            }}
+          >
+            Safe to click more than once — already-loaded templates are
+            skipped.
+          </p>
+        </div>
+      )}
 
       {order.map((type) => {
         const list = byType[type] ?? [];
