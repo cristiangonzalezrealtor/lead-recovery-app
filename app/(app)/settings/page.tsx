@@ -35,7 +35,13 @@ export default async function SettingsPage() {
           </dd>
           <dt style={{ color: "var(--ink-soft)" }}>Market</dt>
           <dd style={{ margin: 0 }}>
-            {user.brandProfile?.market ?? "—"}
+            {[user.brandProfile?.marketCity, user.brandProfile?.marketState]
+              .filter(Boolean)
+              .join(", ") || "—"}
+          </dd>
+          <dt style={{ color: "var(--ink-soft)" }}>Brokerage</dt>
+          <dd style={{ margin: 0 }}>
+            {user.brandProfile?.brokerage ?? "—"}
           </dd>
           <dt style={{ color: "var(--ink-soft)" }}>Tone</dt>
           <dd style={{ margin: 0 }}>
