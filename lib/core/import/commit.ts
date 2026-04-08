@@ -39,6 +39,36 @@ function deriveSourceFromFilename(filename: string): string {
     .join(" ");
 }
 
+/**
+ * Vortex / expired-listing files contain sellers who already tried to list
+ * and failed — that's a strong intent signal. Detect from filename so we
+ * can default leadType=seller and stamp an "expired_listing" tag for the
+ * scoring engine to pick up.
+ */
+function isExpiredListingFile(filename: string): boolean {
+  const f = filename.toLowerCase();
+  return /vortex|expired|withdrawn|cancell?ed|redx|landvoice/.test(f);
+}
+
+/**
+ * Pull lightweight tag signals out of the free-text intent / remarks field.
+ * Cheap regex pass — no LLM call. The scoring engine reads these tags.
+ */
+function extractTagsFromSignal(signal: string | null | undefined): string[] {
+  if (!signal) return [];
+  const s = signal.toLowerCase();
+  const tags: string[] = [];
+  if (/\bexpired\b|withdrawn|cancell?ed/.test(s)) tags.push("expired_listing");
+  if (/price reduc|reduced|new price|lowered/.test(s)) tags.push("price_reduced");
+  if (/vacant|empty|unoccupied/.test(s)) tags.push("vacant");
+  if (/absentee|out of state/.test(s)) tags.push("absentee_owner");
+  if (/cash buyer|all cash/.test(s)) tags.push("cash_buyer");
+  if (/relocat/.test(s)) tags.push("relocation");
+  if (/luxury|estate|waterfront/.test(s)) tags.push("luxury");
+  if (/motivated|must sell|need to sell/.test(s)) tags.push("motivated");
+  return tags;
+}
+
 function coerceEmailStatus(email?: string | null): EmailStatus | null {
   if (!email) return null;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? "valid" : "invalid";
@@ -60,6 +90,7 @@ export async function commitImport(
   const rejectedRows = preview.allRows.filter((r) => r.errors.length > 0);
 
   const fallbackSource = deriveSourceFromFilename(opts.filename);
+  const isExpiredFile = isExpiredListingFile(opts.filename);
 
   const importRecord = await prisma.import.create({
     data: {
@@ -97,6 +128,20 @@ export async function commitImport(
     // Status pipeline: new → classified (via onImport helper).
     const initialStatus = onImport("new", opts.markAsDormant);
 
+    // Tags: explicit CSV tags + signals extracted from intent/remarks +
+    // expired-listing tag if the filename told us so.
+    const csvTags = row.tags
+      ? row.tags.split(/[,;]/).map((t) => t.trim()).filter(Boolean)
+      : [];
+    const signalTags = extractTagsFromSignal(row.intentSignal);
+    const fileTags = isExpiredFile ? ["expired_listing"] : [];
+    const tags = Array.from(new Set([...csvTags, ...signalTags, ...fileTags]));
+
+    // Default leadType: explicit CSV value > expired-file inference > buyer.
+    const inferredType: LeadType =
+      (row.leadType as LeadType) ??
+      (isExpiredFile || tags.includes("expired_listing") ? "seller" : "buyer");
+
     const lead = await prisma.lead.create({
       data: {
         userId: opts.userId,
@@ -104,13 +149,11 @@ export async function commitImport(
         lastName: row.lastName || null,
         email: row.email || null,
         phone: row.phone || null,
-        leadType: (row.leadType as LeadType) ?? "buyer",
+        leadType: inferredType,
         source: row.source || fallbackSource,
         intentSignal: row.intentSignal || null,
         timeframeDays: row.timeframeDays ?? null,
-        tags: row.tags
-          ? row.tags.split(/[,;]/).map((t) => t.trim()).filter(Boolean)
-          : [],
+        tags,
         importedFromId: importRecord.id,
         status: initialStatus,
         isDormant: opts.markAsDormant,

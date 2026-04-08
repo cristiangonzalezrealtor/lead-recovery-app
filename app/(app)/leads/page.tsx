@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { ScoreBadge } from "@/components/ui/Badge";
 import { ConfidenceBadge } from "@/components/leads/ConfidenceBadge";
+import { RescoreAllButton } from "@/components/leads/RescoreAllButton";
 import type { Prisma } from "@prisma/client";
 
 const PAGE_SIZE = 100;
@@ -112,9 +113,12 @@ export default async function LeadsPage({
           <Link className="btn" href="/leads?band=nurture">Nurture</Link>
           <Link className="btn" href="/leads?filter=dormant">Dormant</Link>
         </div>
-        <Link className={`btn ${showConfidence ? "primary" : ""}`} href={toggleHref}>
-          {showConfidence ? "Hide" : "Show"} confidence (trust level)
-        </Link>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <Link className={`btn ${showConfidence ? "primary" : ""}`} href={toggleHref}>
+            {showConfidence ? "Hide" : "Show"} confidence (trust level)
+          </Link>
+          <RescoreAllButton leadCount={totalCount} />
+        </div>
       </div>
 
       <div className="card" style={{ padding: 0 }}>

@@ -7,6 +7,7 @@ import { ScoreBadge } from "@/components/ui/Badge";
 import { ConfidenceBadge } from "@/components/leads/ConfidenceBadge";
 import { MissedOpportunityBanner } from "@/components/leads/MissedOpportunityBanner";
 import { EnrollButton } from "@/components/leads/EnrollButton";
+import { LeadTypeSelect } from "@/components/leads/LeadTypeSelect";
 import { markOnboardingStep } from "@/lib/core/onboarding/mark";
 
 export default async function LeadDetailPage({
@@ -90,7 +91,9 @@ export default async function LeadDetailPage({
             <div className="subtitle">What LeadRevive knows about this lead.</div>
             <dl style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: "8px 16px", margin: 0 }}>
               <dt style={{ color: "var(--ink-soft)" }}>Type</dt>
-              <dd style={{ margin: 0 }}>{lead.leadType}</dd>
+              <dd style={{ margin: 0 }}>
+                <LeadTypeSelect leadId={lead.id} currentType={lead.leadType} />
+              </dd>
               <dt style={{ color: "var(--ink-soft)" }}>Status</dt>
               <dd style={{ margin: 0 }}>{lead.status}</dd>
               <dt style={{ color: "var(--ink-soft)" }}>Timeframe</dt>

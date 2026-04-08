@@ -48,12 +48,28 @@ const SOURCE_QUALITY: Record<string, number> = {
   open_house: 10,
   cold_list: 4,
   unknown: 2,
+  // Expired-listing / agent prospecting tools — these are warm seller pools.
+  vortex: 13,
+  expired: 13,
+  expireds: 13,
+  expired_listings: 13,
+  mls: 11,
+  fsbo: 12,
+  fub: 10,
+  followup_boss: 10,
+  manual_entry: 8,
 };
 
 function sourcePoints(source?: string | null): number {
   if (!source) return 2;
-  const key = source.toLowerCase().replace(/[^a-z]/g, "_");
-  return SOURCE_QUALITY[key] ?? 5;
+  const raw = source.toLowerCase();
+  const key = raw.replace(/[^a-z]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+  if (SOURCE_QUALITY[key] != null) return SOURCE_QUALITY[key];
+  // Substring fallbacks — "Vortex (expired listings)" still maps to vortex.
+  for (const [k, v] of Object.entries(SOURCE_QUALITY)) {
+    if (key.includes(k)) return v;
+  }
+  return 5;
 }
 
 // ── Intent (0–25) ────────────────────────────────────────────────────
@@ -85,14 +101,48 @@ function intentPoints(input: ScoringInput["lead"]): ScoreFactor | null {
     label = "Unclassified intent";
   }
 
-  if (/ready|urgent|asap|motivated/.test(signal)) pts = Math.min(25, pts + 3);
+  // Expired listings / withdrawn / cancelled — these are sellers who tried
+  // and failed. Treat as the strongest seller intent.
+  if (
+    tags.includes("expired_listing") ||
+    /\bexpired\b|withdrawn|cancell?ed|off market/.test(signal)
+  ) {
+    pts = Math.max(pts, 23);
+    label = "Expired listing — high seller intent";
+  }
+
+  // Generic motivation language.
+  if (/ready|urgent|asap|motivated|must sell|need to sell|relocat/.test(signal)) {
+    pts = Math.min(25, pts + 3);
+  }
+  // Price reductions signal a motivated seller.
+  if (/price reduc|reduced|drop in price|lowered|new price/.test(signal)) {
+    pts = Math.min(25, pts + 2);
+  }
+  // Vacant homes are easier to show / sell.
+  if (/vacant|empty|unoccupied/.test(signal)) {
+    pts = Math.min(25, pts + 2);
+  }
   if (tags.includes("cash_buyer")) pts = Math.min(25, pts + 2);
 
   return { key: "intent", label, points: pts };
 }
 
 // ── Timeframe (0–20) ─────────────────────────────────────────────────
-function timeframePoints(days?: number | null): ScoreFactor | null {
+function timeframePoints(
+  days: number | null | undefined,
+  tags: string[] = [],
+  signal: string = ""
+): ScoreFactor | null {
+  // For expired listings the "timeframe" really is "now" — they already
+  // tried to sell and want to relist. Don't penalize a missing field.
+  if (tags.includes("expired_listing") || /expired|withdrawn/.test(signal)) {
+    return {
+      key: "timeframe",
+      label: "Expired listing — ready to relist",
+      points: 18,
+    };
+  }
   if (days == null) {
     return { key: "timeframe", label: "No timeframe provided", points: 4 };
   }
@@ -165,12 +215,17 @@ function completenessFactor(input: ScoringInput["lead"]): ScoreFactor {
 // ── Fit / opportunity (0–10) ─────────────────────────────────────────
 function fitFactor(input: ScoringInput["lead"]): ScoreFactor {
   const tags = new Set(input.tags ?? []);
+  const signal = (input.intentSignal ?? "").toLowerCase();
   let pts = 0;
-  if (tags.has("luxury")) pts += 4;
-  if (tags.has("cash_buyer")) pts += 3;
-  if (tags.has("absentee_owner")) pts += 3;
-  if (tags.has("relocation")) pts += 2;
-  if (tags.has("downsizing")) pts += 2;
+  if (tags.has("luxury") || /luxury|estate|waterfront/.test(signal)) pts += 4;
+  if (tags.has("cash_buyer") || /cash buyer|all cash/.test(signal)) pts += 3;
+  if (tags.has("absentee_owner") || /absentee|out of state owner/.test(signal))
+    pts += 3;
+  if (tags.has("relocation") || /relocat/.test(signal)) pts += 2;
+  if (tags.has("downsizing") || /downsiz/.test(signal)) pts += 2;
+  if (tags.has("expired_listing")) pts += 4;
+  if (tags.has("price_reduced") || /price reduc|reduced/.test(signal)) pts += 2;
+  if (tags.has("vacant") || /vacant|empty home/.test(signal)) pts += 2;
   pts = Math.min(10, pts);
   return {
     key: "fit",
@@ -192,7 +247,11 @@ export function scoreLead(input: ScoringInput): ScoreResult {
   const factors: ScoreFactor[] = [];
   const intent = intentPoints(input.lead);
   if (intent) factors.push(intent);
-  const tf = timeframePoints(input.lead.timeframeDays);
+  const tf = timeframePoints(
+    input.lead.timeframeDays,
+    input.lead.tags ?? [],
+    input.lead.intentSignal ?? ""
+  );
   if (tf) factors.push(tf);
   factors.push(engagementPoints(input.recentActivities));
   factors.push(sourceFactor(input.lead));
