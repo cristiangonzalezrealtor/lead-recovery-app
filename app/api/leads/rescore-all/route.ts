@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { rescoreLead } from "@/lib/core/scoring/persist";
+import { enrichLead } from "@/lib/core/enrich";
 
 function extractTagsFromSignal(signal: string | null | undefined): string[] {
   if (!signal) return [];
@@ -83,12 +84,21 @@ export async function POST() {
     }
 
     await rescoreLead(lead.id);
+    // Re-run revival / next-action / confidence so dormant status and
+    // probability pick up the new tags + source rules.
+    await enrichLead(lead.id);
     updated++;
   }
+
+  // Count the new dormant pool to show the user something satisfying.
+  const newlyDormant = await prisma.lead.count({
+    where: { userId: user.id, isDormant: true },
+  });
 
   return NextResponse.json({
     ok: true,
     rescored: updated,
     promotedToSeller,
+    dormantCount: newlyDormant,
   });
 }

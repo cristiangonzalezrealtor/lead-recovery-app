@@ -218,6 +218,17 @@ model Lead {
   emailStatus            EmailStatus?
   phoneStatus            PhoneStatus?
 
+  // Address (optional — most CSVs include some subset of these)
+  addressStreet          String?
+  addressCity            String?
+  addressState           String?
+  addressZip             String?
+
+  // Free-form bag for any CSV column we don't have a first-class field for.
+  // Stored as { originalHeader: value } so the lead detail page can render
+  // every field the agent uploaded even if we don't know what it means.
+  customFields           Json?
+
   lastEngagedAt          DateTime?
   lastContactedAt        DateTime?
   // Phase 3 — revival tracking

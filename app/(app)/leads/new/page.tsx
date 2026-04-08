@@ -24,6 +24,10 @@ export default function NewLeadPage() {
     source: "",
     intentSignal: "",
     timeframeDays: "",
+    addressStreet: "",
+    addressCity: "",
+    addressState: "",
+    addressZip: "",
     markAsDormant: false,
   });
   const [busy, setBusy] = useState(false);
@@ -53,6 +57,10 @@ export default function NewLeadPage() {
           lastName: form.lastName || undefined,
           source: form.source || undefined,
           intentSignal: form.intentSignal || undefined,
+          addressStreet: form.addressStreet || undefined,
+          addressCity: form.addressCity || undefined,
+          addressState: form.addressState || undefined,
+          addressZip: form.addressZip || undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -166,6 +174,55 @@ export default function NewLeadPage() {
               disabled={busy}
               rows={3}
               placeholder="Anything you know about what they want."
+            />
+          </Field>
+        </div>
+
+        <h2 style={{ marginTop: 24 }}>Address</h2>
+        <div className="subtitle">Optional — property or mailing address.</div>
+
+        <div style={{ marginTop: 12 }}>
+          <Field label="Street">
+            <input
+              type="text"
+              value={form.addressStreet}
+              onChange={(e) => update("addressStreet", e.target.value)}
+              disabled={busy}
+              placeholder="123 Main St"
+            />
+          </Field>
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "2fr 1fr 1fr",
+            gap: 12,
+            marginTop: 12,
+          }}
+        >
+          <Field label="City">
+            <input
+              type="text"
+              value={form.addressCity}
+              onChange={(e) => update("addressCity", e.target.value)}
+              disabled={busy}
+            />
+          </Field>
+          <Field label="State">
+            <input
+              type="text"
+              value={form.addressState}
+              onChange={(e) => update("addressState", e.target.value)}
+              disabled={busy}
+              placeholder="CA"
+            />
+          </Field>
+          <Field label="Zip">
+            <input
+              type="text"
+              value={form.addressZip}
+              onChange={(e) => update("addressZip", e.target.value)}
+              disabled={busy}
             />
           </Field>
         </div>

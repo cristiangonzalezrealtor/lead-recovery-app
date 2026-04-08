@@ -83,6 +83,26 @@ const FIELD_ALIASES: Record<string, string[]> = {
     "days on market",
   ],
   tags: ["tags", "labels"],
+  addressStreet: [
+    "address",
+    "street",
+    "street address",
+    "property address",
+    "address 1",
+    "address line 1",
+    "addr",
+    "mailing address",
+  ],
+  addressCity: ["city", "town", "municipality"],
+  addressState: ["state", "province", "st", "region"],
+  addressZip: [
+    "zip",
+    "zip code",
+    "postal",
+    "postal code",
+    "postcode",
+    "zip4",
+  ],
 };
 
 export type FieldKey = keyof typeof FIELD_ALIASES;
@@ -132,6 +152,10 @@ const RowSchema = z.object({
   intentSignal: z.string().trim().optional(),
   timeframeDays: z.coerce.number().int().nonnegative().optional(),
   tags: z.string().optional(),
+  addressStreet: z.string().trim().optional(),
+  addressCity: z.string().trim().optional(),
+  addressState: z.string().trim().optional(),
+  addressZip: z.string().trim().optional(),
 });
 
 export type RowSeverity = "ok" | "warning" | "error";
@@ -262,6 +286,14 @@ export function parseCsv(
       timeframeDays:
         map.timeframeDays != null ? cells[map.timeframeDays]?.trim() : undefined,
       tags: map.tags != null ? cells[map.tags]?.trim() : undefined,
+      addressStreet:
+        map.addressStreet != null ? cells[map.addressStreet]?.trim() : undefined,
+      addressCity:
+        map.addressCity != null ? cells[map.addressCity]?.trim() : undefined,
+      addressState:
+        map.addressState != null ? cells[map.addressState]?.trim() : undefined,
+      addressZip:
+        map.addressZip != null ? cells[map.addressZip]?.trim() : undefined,
     };
 
     const parsed = RowSchema.safeParse(candidate);

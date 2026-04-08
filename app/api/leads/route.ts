@@ -38,6 +38,10 @@ const Body = z
     source: z.string().trim().max(80).optional(),
     intentSignal: z.string().trim().max(2000).optional(),
     timeframeDays: z.coerce.number().int().nonnegative().max(3650).optional(),
+    addressStreet: z.string().trim().max(200).optional(),
+    addressCity: z.string().trim().max(120).optional(),
+    addressState: z.string().trim().max(80).optional(),
+    addressZip: z.string().trim().max(20).optional(),
     markAsDormant: z.boolean().optional(),
   })
   .refine((d) => !!d.email || !!d.phone, {
@@ -105,6 +109,10 @@ export async function POST(req: Request) {
       source: data.source || "Manual entry",
       intentSignal: data.intentSignal || null,
       timeframeDays: data.timeframeDays ?? null,
+      addressStreet: data.addressStreet || null,
+      addressCity: data.addressCity || null,
+      addressState: data.addressState || null,
+      addressZip: data.addressZip || null,
       tags: [],
       status: initialStatus,
       isDormant: !!data.markAsDormant,

@@ -35,7 +35,7 @@ export async function scanDormant(userId?: string): Promise<ScanResult> {
   const leads = await prisma.lead.findMany({
     where,
     include: { activities: { orderBy: { occurredAt: "desc" }, take: 100 } },
-    take: 5000,
+    take: 10000,
   });
 
   for (const lead of leads) {

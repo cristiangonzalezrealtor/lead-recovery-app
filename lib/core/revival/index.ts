@@ -1,10 +1,20 @@
 // RevivalService — detects dormant leads and scores revival probability.
 //
-// Dormant criteria (all required):
-//   • no reply in 30+ days
-//   • no engagement event in 30+ days
-//   • no manual note/appointment in 30+ days
-//   • not in a terminal status (unsubscribed, bounced, active_client, archived)
+// Dormant criteria (either path makes a lead dormant):
+//
+//   Path A — "went cold": previously engaged, now silent
+//     • no engagement event in 30+ days AND
+//     • ageMs (last-contacted / last-engaged / createdAt) > 30 days AND
+//     • not in a terminal status
+//
+//   Path B — "cold prospecting list": imported but never warmed up
+//     • zero inbound engagement ever AND
+//     • never contacted (lastContactedAt is null) AND
+//     • comes from a prospecting source (expired_listing tag, vortex /
+//       expired / redx / fsbo source, or source name containing those)
+//
+//   Neither path applies to terminal statuses (unsubscribed, bounced,
+//   active_client, archived).
 //
 // Probability weighting:
 //   High hits: seller/investor type, source quality ≥12, <12mo since contact
@@ -51,7 +61,26 @@ type LeadInput = Pick<
   | "lastEngagedAt"
   | "lastContactedAt"
   | "createdAt"
+  | "tags"
 >;
+
+/**
+ * A lead is "cold prospecting" if it came off a list we bought or scraped
+ * rather than from inbound engagement. These leads are dormant the moment
+ * they land — the whole reason to import them is to run revival on them.
+ */
+function isColdProspecting(lead: LeadInput): boolean {
+  const tags = lead.tags ?? [];
+  if (
+    tags.includes("expired_listing") ||
+    tags.includes("cold_list") ||
+    tags.includes("fsbo")
+  ) {
+    return true;
+  }
+  const source = (lead.source ?? "").toLowerCase();
+  return /vortex|expired|withdrawn|redx|landvoice|fsbo|cold list/.test(source);
+}
 
 export function evaluateRevival(
   lead: LeadInput,
@@ -73,13 +102,20 @@ export function evaluateRevival(
       ENGAGEMENT_TYPES.has(a.type) &&
       now - a.occurredAt.getTime() < THIRTY_DAYS
   );
+  const everEngaged = activities.some((a) => ENGAGEMENT_TYPES.has(a.type));
 
-  // If we've never contacted the lead, use createdAt as the floor —
-  // a brand-new lead is not dormant just because lastContactedAt is null.
+  // Path A — previously active, now silent.
   const ageFloor = lead.lastContactedAt ?? lead.lastEngagedAt ?? lead.createdAt;
   const ageMs = now - ageFloor.getTime();
+  const wentCold = !recentEngagement && ageMs > THIRTY_DAYS;
 
-  const isDormant = !recentEngagement && ageMs > THIRTY_DAYS;
+  // Path B — cold prospecting list (expired listings, FSBO, etc.) that
+  // has never been contacted and never engaged. Dormant the moment it
+  // lands because revival outreach IS the workflow for this pool.
+  const coldProspectingDormant =
+    isColdProspecting(lead) && !everEngaged && lead.lastContactedAt == null;
+
+  const isDormant = wentCold || coldProspectingDormant;
   if (!isDormant) {
     return {
       isDormant: false,
@@ -92,6 +128,15 @@ export function evaluateRevival(
   const reasons: string[] = [];
   let high = 0;
   let medium = 0;
+
+  if (coldProspectingDormant) {
+    reasons.push("Cold prospecting list — never contacted");
+    // Expired listings specifically are motivated sellers.
+    if ((lead.tags ?? []).includes("expired_listing")) {
+      high++;
+      reasons.push("Expired listing — motivated seller");
+    }
+  }
 
   if (lead.leadType === "seller" || lead.leadType === "investor") {
     high++;

@@ -111,6 +111,69 @@ export default async function LeadDetailPage({
             </dl>
           </div>
 
+          {(lead.addressStreet ||
+            lead.addressCity ||
+            lead.addressState ||
+            lead.addressZip) && (
+            <div className="card">
+              <h2>Address</h2>
+              <div className="subtitle">Property / mailing address from the import.</div>
+              <p style={{ margin: 0, lineHeight: 1.5 }}>
+                {lead.addressStreet && (
+                  <>
+                    {lead.addressStreet}
+                    <br />
+                  </>
+                )}
+                {[lead.addressCity, lead.addressState, lead.addressZip]
+                  .filter(Boolean)
+                  .join(", ")}
+              </p>
+            </div>
+          )}
+
+          {lead.customFields &&
+            typeof lead.customFields === "object" &&
+            !Array.isArray(lead.customFields) &&
+            Object.keys(lead.customFields as Record<string, unknown>).length > 0 && (
+              <div className="card">
+                <h2>All imported fields</h2>
+                <div className="subtitle">
+                  Every column from the CSV row we don't already show above.
+                </div>
+                <dl
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "180px 1fr",
+                    gap: "6px 16px",
+                    margin: 0,
+                    fontSize: 13,
+                  }}
+                >
+                  {Object.entries(
+                    lead.customFields as Record<string, string>
+                  ).map(([key, value]) => (
+                    <div
+                      key={key}
+                      style={{ display: "contents" }}
+                    >
+                      <dt
+                        style={{
+                          color: "var(--ink-soft)",
+                          wordBreak: "break-word",
+                        }}
+                      >
+                        {key}
+                      </dt>
+                      <dd style={{ margin: 0, wordBreak: "break-word" }}>
+                        {String(value)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
+
           <div className="card">
             <h2>Next action</h2>
             <div className="subtitle">Suggested next step for this lead.</div>

@@ -16,6 +16,7 @@ export function RescoreAllButton({ leadCount }: { leadCount: number }) {
   const [result, setResult] = useState<{
     rescored: number;
     promotedToSeller: number;
+    dormantCount: number;
   } | null>(null);
 
   async function run() {
@@ -28,6 +29,7 @@ export function RescoreAllButton({ leadCount }: { leadCount: number }) {
       setResult({
         rescored: data.rescored ?? 0,
         promotedToSeller: data.promotedToSeller ?? 0,
+        dormantCount: data.dormantCount ?? 0,
       });
       router.refresh();
     } catch (err: any) {
@@ -43,6 +45,8 @@ export function RescoreAllButton({ leadCount }: { leadCount: number }) {
         Rescored {result.rescored.toLocaleString()} leads
         {result.promotedToSeller > 0 &&
           ` · ${result.promotedToSeller} reclassified as sellers`}
+        {result.dormantCount > 0 &&
+          ` · ${result.dormantCount.toLocaleString()} marked dormant`}
         .
       </div>
     );

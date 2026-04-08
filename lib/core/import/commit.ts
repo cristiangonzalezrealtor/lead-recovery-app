@@ -92,6 +92,13 @@ export async function commitImport(
   const fallbackSource = deriveSourceFromFilename(opts.filename);
   const isExpiredFile = isExpiredListingFile(opts.filename);
 
+  // Headers we mapped to first-class Lead columns — everything else in a
+  // row gets stashed in the customFields JSON bag so the lead detail page
+  // can display the entire CSV row, not just the handful we understand.
+  const mappedHeaders = new Set<string>(
+    Object.values(preview.detectedColumns).filter(Boolean) as string[]
+  );
+
   const importRecord = await prisma.import.create({
     data: {
       userId: opts.userId,
@@ -142,6 +149,17 @@ export async function commitImport(
       (row.leadType as LeadType) ??
       (isExpiredFile || tags.includes("expired_listing") ? "seller" : "buyer");
 
+    // Build the customFields bag from every raw cell whose header we
+    // didn't consume into a first-class Lead column.
+    const customFields: Record<string, string> = {};
+    for (const [header, value] of Object.entries(row.raw)) {
+      if (!header) continue;
+      if (mappedHeaders.has(header)) continue;
+      const v = (value ?? "").trim();
+      if (!v) continue;
+      customFields[header] = v;
+    }
+
     const lead = await prisma.lead.create({
       data: {
         userId: opts.userId,
@@ -154,6 +172,11 @@ export async function commitImport(
         intentSignal: row.intentSignal || null,
         timeframeDays: row.timeframeDays ?? null,
         tags,
+        addressStreet: row.addressStreet || null,
+        addressCity: row.addressCity || null,
+        addressState: row.addressState || null,
+        addressZip: row.addressZip || null,
+        customFields: Object.keys(customFields).length ? customFields : undefined,
         importedFromId: importRecord.id,
         status: initialStatus,
         isDormant: opts.markAsDormant,

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getOnboardingState } from "@/lib/core/onboarding/state";
 import { ChecklistReopenLink } from "@/components/onboarding/ChecklistReopenLink";
 import { ClearLeadsButton } from "@/components/ui/ClearLeadsButton";
+import { ThemeSwitcher } from "@/components/ui/ThemeSwitcher";
 
 export default async function SettingsPage() {
   const user = await requireUser();
@@ -58,6 +59,16 @@ export default async function SettingsPage() {
           Profile editing lives in the onboarding flow today. Reach out if you
           need to change anything above.
         </p>
+      </div>
+
+      <div className="card">
+        <h2>Appearance</h2>
+        <div className="subtitle">
+          Pick a theme. Your choice is saved to this browser.
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <ThemeSwitcher />
+        </div>
       </div>
 
       {showReopen && (
